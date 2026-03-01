@@ -16,7 +16,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-
+import { supabase } from "@/lib/supabase";
 // ─── Types ────────────────────────────────────────────────────────────────────
 type TransactionType = "income" | "expense";
 type Category =
@@ -104,11 +104,22 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function FinancePage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(SEED);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"dashboard" | "transactions" | "add">("dashboard");
   const [filterType, setFilterType] = useState<"all" | "income" | "expense">("all");
   const [searchQ, setSearchQ] = useState("");
-
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from("transactions")
+        .select("*")
+        .order("date", { ascending: false });
+      if (data) setTransactions(data);
+      setLoading(false);
+    }
+    load();
+  }, []);
   // Form state
   const [form, setForm] = useState({
     description: "", amount: "", type: "expense" as TransactionType,
@@ -156,22 +167,28 @@ export default function FinancePage() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [transactions, filterType, searchQ]);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.description || !form.amount) return;
-    const newT: Transaction = {
-      id: Date.now().toString(),
+    const newT = {
       description: form.description,
       amount: parseFloat(form.amount),
       type: form.type,
       category: form.category,
       date: form.date,
     };
-    setTransactions(prev => [newT, ...prev]);
+    const { data } = await supabase
+      .from("transactions")
+      .insert(newT)
+      .select()
+      .single();
+    if (data) setTransactions(prev => [data, ...prev]);
     setForm({ description: "", amount: "", type: "expense", category: "Alimentação", date: new Date().toISOString().split("T")[0] });
     setActiveTab("transactions");
   };
 
-  const handleDelete = (id: string) => {
+  // Substituir handleDelete por:
+  const handleDelete = async (id: string) => {
+    await supabase.from("transactions").delete().eq("id", id);
     setTransactions(prev => prev.filter(t => t.id !== id));
   };
 
